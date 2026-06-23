@@ -3,27 +3,58 @@
 import { useState } from "react";
 
 export default function Home() {
-  const [fileName, setFileName] = useState("");
+  const [file, setFile] = useState<File | null>(null);
   const [result, setResult] = useState("");
 
   const generateSubtitles = async () => {
-  try {
-    setResult("Loading...");
+    try {
+      if (!file) {
+        setResult("Please select a file first");
+        return;
+      }
 
-    const res = await fetch("/api/transcribe");
+      setResult("Uploading and generating subtitles...");
 
-    console.log("Status:", res.status);
+      const formData = new FormData();
+      formData.append("file", file);
 
-    const data = await res.json();
+      const res = await fetch("/api/transcribe", {
+        method: "POST",
+        body: formData,
+      });
 
-    console.log("Data:", data);
+      const data = await res.json();
 
-    setResult(data.text || "No text received");
-  } catch (error) {
-    console.error(error);
-    setResult("Error generating subtitles");
-  }
-};
+      if (data.error) {
+        setResult(data.error);
+        return;
+      }
+
+      if (data.subtitles) {
+        const blob = new Blob(
+          [data.subtitles],
+          { type: "text/plain" }
+        );
+
+        const url = URL.createObjectURL(blob);
+
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "subtitles.srt";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+
+      setResult(
+        data.transcript ||
+        "Transcript generated successfully"
+      );
+    } catch (error) {
+      console.error(error);
+      setResult("Error generating subtitles");
+    }
+  };
 
   return (
     <main className="min-h-screen bg-black text-white">
@@ -41,8 +72,9 @@ export default function Home() {
         </h1>
 
         <p className="text-gray-400 text-lg max-w-2xl mx-auto">
-          SubifyAI automatically generates stylish captions, subtitles and SRT
-          files for YouTube Shorts, Instagram Reels and TikTok.
+          SubifyAI automatically generates stylish captions,
+          subtitles and SRT files for YouTube Shorts,
+          Instagram Reels and TikTok.
         </p>
       </section>
 
@@ -62,15 +94,9 @@ export default function Home() {
               accept="video/*,audio/*"
               className="w-full border border-gray-700 p-4 rounded-xl bg-zinc-900"
               onChange={(e) =>
-                setFileName(e.target.files?.[0]?.name || "")
+                setFile(e.target.files?.[0] || null)
               }
             />
-
-            {fileName && (
-              <p className="mt-4 text-green-400">
-                Selected: {fileName}
-              </p>
-            )}
 
             <button
               onClick={generateSubtitles}
@@ -80,11 +106,16 @@ export default function Home() {
             </button>
 
             {result && (
-  <div className="mt-6 p-4 bg-zinc-900 rounded-xl border border-zinc-700">
-    <h3 className="font-bold mb-2">Result</h3>
-    <p className="whitespace-pre-wrap">{result}</p>
-  </div>
-)}
+              <div className="mt-6 p-4 bg-zinc-900 rounded-xl text-left">
+                <h3 className="font-bold mb-2">
+                  Transcript
+                </h3>
+
+                <p className="whitespace-pre-wrap">
+                  {result}
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </section>

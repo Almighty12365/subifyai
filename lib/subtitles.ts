@@ -1,0 +1,6 @@
+export function generateSRT(text: string) {
+  return `1
+00:00:00,000 --> 00:00:05,000
+${text}
+`;
+}
