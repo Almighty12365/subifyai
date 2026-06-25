@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
 import fs from "fs-extra";
 import path from "path";
-import fsNative from "fs";
 
+import { transcribeAudio } from "../../../lib/transcription";
 import { extractAudio } from "../../../lib/extractAudio";
 import { burnSubtitles } from "../../../lib/burnSubtitles";
-import { groq } from "../../../lib/groq";
 import { generateSRT } from "../../../lib/subtitles";
 
 export async function POST(req: Request) {
@@ -24,54 +23,50 @@ export async function POST(req: Request) {
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
-    const uploadDir = path.join(process.cwd(), "uploads");
+    const uploadRoot = path.join(process.cwd(), "uploads");
+await fs.ensureDir(uploadRoot);
 
-    await fs.ensureDir(uploadDir);
+const projectId = Date.now().toString();
 
-    const videoPath = path.join(
-      uploadDir,
-      `${Date.now()}-${file.name}`
-    );
+const projectDir = path.join(uploadRoot, projectId);
+await fs.ensureDir(projectDir);
 
+const videoPath = path.join(projectDir, "input.mp4");
+await fs.writeFile(videoPath, buffer);
 
-    await fs.writeFile(videoPath, buffer);
+const audioPath = path.join(projectDir, "audio.mp3");
 
-    const audioPath = path.join(
-      uploadDir,
-      `${Date.now()}.mp3`
-    );
+const srtPath = path.join(projectDir, "subtitles.srt");
+
+const outputVideoPath = path.join(projectDir, "output.mp4");
+
+const transcriptPath = path.join(projectDir, "transcript.json");
 
     await extractAudio(videoPath, audioPath);
 
     const transcription =
-      await groq.audio.transcriptions.create({
-        file: fsNative.createReadStream(audioPath),
-        model: "whisper-large-v3",
-      });
+  await transcribeAudio(audioPath);
 
-    const srt = generateSRT(transcription.text);
+    const subtitleData = generateSRT(transcription.text);
 
-    const srtPath = "C:\\temp\\subtitle.srt";
-
-await fs.ensureDir("C:\\temp");
-await fs.writeFile(srtPath, srt);
-
-   const outputVideoPath =
-  "C:\\temp\\subtitled.mp4";
-
+    await fs.writeFile(srtPath, subtitleData.srt);
+    await fs.writeJson(transcriptPath, transcription, {
+  spaces: 2,
+});
     await burnSubtitles(
       videoPath,
       srtPath,
       outputVideoPath
     );
 
-    return NextResponse.json({
-      success: true,
-      transcript: transcription.text,
-      subtitles: srt,
-      srtFile: srtPath,
-      videoFile: outputVideoPath,
-    });
+   return NextResponse.json({
+  success: true,
+  projectId,
+  transcript: transcription.text,
+  subtitles: subtitleData.srt,
+  subtitleItems: subtitleData.items,
+  videoFile: outputVideoPath,
+});
   } catch (error: any) {
     console.error(error);
 
