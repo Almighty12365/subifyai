@@ -47,7 +47,7 @@ const transcriptPath = path.join(projectDir, "transcript.json");
     const transcription =
   await transcribeAudio(audioPath);
 
-    const subtitleData = generateSRT(transcription.text);
+    const subtitleData = generateSRT(transcription.segments);
 
     await fs.writeFile(srtPath, subtitleData.srt);
     await fs.writeJson(transcriptPath, transcription, {

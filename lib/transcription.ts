@@ -1,22 +1,41 @@
-import fs from "fs";
-import { groq } from "./groq";
+import { spawn } from "child_process";
+import path from "path";
 
-export async function transcribeAudio(
-  audioPath: string
-) {
-  const provider =
-    process.env.TRANSCRIPTION_PROVIDER || "groq";
+export function transcribeAudio(audioPath: string): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const script = path.join(
+      process.cwd(),
+      "python",
+      "transcribe.py"
+    );
 
-  switch (provider) {
-    case "groq":
-      return await groq.audio.transcriptions.create({
-        file: fs.createReadStream(audioPath),
-        model: "whisper-large-v3",
-      });
+    const python = spawn("python", [
+      script,
+      audioPath,
+    ]);
 
-    default:
-      throw new Error(
-        `Unknown transcription provider: ${provider}`
-      );
-  }
+    let output = "";
+    let error = "";
+
+    python.stdout.on("data", (data) => {
+      output += data.toString();
+    });
+
+    python.stderr.on("data", (data) => {
+      error += data.toString();
+    });
+
+    python.on("close", (code) => {
+      if (code !== 0) {
+        reject(new Error(error));
+        return;
+      }
+
+      try {
+        resolve(JSON.parse(output));
+      } catch (e) {
+        reject(e);
+      }
+    });
+  });
 }
